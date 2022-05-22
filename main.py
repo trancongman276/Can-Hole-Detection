@@ -1,3 +1,4 @@
+import math
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +26,8 @@ def detect_eclipse(img):
         orientation = best[5]
 
         cy, cx = ellipse_perimeter(yc, xc, a, b, orientation)
-        return (cy, cx)
+        return (cy, cx, 1)
+    return None
 
 
 def color_mask(img):
@@ -40,7 +42,7 @@ def color_mask(img):
 def get_hole(mask):
     # Get the shape of the can's hole
     output = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
-    (numLabels, _, stats, _) = output
+    (numLabels, _, stats, centroids) = output
 
     max = 0
     pos = -1
@@ -55,7 +57,7 @@ def get_hole(mask):
     w = stats[pos, cv2.CC_STAT_WIDTH]
     h = stats[pos, cv2.CC_STAT_HEIGHT]
 
-    return (x, y, w, h)
+    return (x, y, w, h), centroids[pos]
 
 
 def draw_on_original(ori, ori_stat, rec_stat):
@@ -68,14 +70,29 @@ def draw_on_original(ori, ori_stat, rec_stat):
     cv2.rectangle(output, (_x, _y), (_x + w, _y + h), (0, 255, 0), 3)
     return output
 
+def slope(point1, point2):
+    x1, y1 = point1
+    x2, y2 = point2
+    return abs((y2-y1)/(x2-x1))
+
 
 if __name__ == "__main__":
     img = cv2.imread("frame0.jpg")
-    cy, cx = detect_eclipse(img)
+    try:
+        cy, cx = detect_eclipse(img)
+    except:
+        print('Cannot detect top can')
+        exit
+
     can_top = img[cy.min():cy.max(),
                   cx.min():cx.max()]
 
     mask = color_mask(can_top)
-    rec_stat = get_hole(mask)
+    rec_stat, center = get_hole(mask)
     ori_stat = (cx.min(), cy.min())
     plt.imshow(draw_on_original(img, ori_stat, rec_stat)), plt.show()
+
+    middle_can = ((cx.min() + cx.max())//2, (cy.min() + cy.max())//2)
+    middle_hole = center + np.array([cx.min(), cy.min()])
+    _slope = slope(middle_can, middle_hole)
+    print(math.degrees(math.atan(_slope)))
